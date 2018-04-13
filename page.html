@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>分页</title>
+    <script src="https://cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script>
+</head>
+<style>
+    body,ul,li {
+        padding: 0;
+        margin: 0;
+    }
+    .clearfix:after,.clearfix:before {
+        display: table;
+        content: "";
+    }
+    .clearfix:after {
+        clear: both;
+    }
+    .clearfix {
+        zoom: 1;
+    }
+    button {
+        border: 0 none;
+        outline-style: none;
+    }
+    .fl {
+        float: left;
+    }
+    li {
+        list-style: none;
+        width: 28px;
+        height: 28px;
+        font: 13px/28px HelveticaNeue;
+        text-align: center;
+        background: #fff;
+        border: 1px solid #D3DCE6;
+        cursor: pointer;
+        color: #475669;
+        letter-spacing: 0;
+    }
+    .pre_page,.back_page {
+        width: 30px;
+        height: 30px;
+        background: #EFF2F7;
+        cursor: pointer;
+        font: 22px/28px HelveticaNeue;
+        color: #99A9BF;
+        border: 1px solid #D3DCE6;
+    }
+    .page_active {
+        color: #fff;
+        background: #5944C3;
+    }
+    .page_btn {
+        background: #fff;
+    }
+    /* 跳转 */
+    .jump {
+        line-height: 30px;
+        font-size: 14px;
+        margin-left: 30px;
+    }
+    .jump input {
+        width: 40px;
+        margin: 0 5px;
+        text-indent: 10px;
+    }
+    .jump button {
+        color: #fff;
+        background: #5944c3;
+    }
+</style>
+<body>
+   <!-- 分页 -->
+    <!-- 1 2 3 ... page_all-1 page_all 跳到第 页 -->
+    <!-- 分析：
+        初始添加页数列表：
+            1.总页数page_all<=6
+                1 2 3 4 5 6
+            2.总页数page_all>6
+                1 2 3 ... page_all-1 page_all
+        判断前后页数是否可用：
+            1.前一页 pre_page
+                page=1时 前一页不可用
+            2.后一页 back_page
+                page=page_all时 后一页不可用
+        请求页数page：
+            1.点击前一页
+            2.点击后一页
+            3.页数点击 
+            4.输入页数跳转  
+
+           总页数page_all<=6：
+                1 2 3 4 5 6
+                不需要重新加载li标签
+           总页数page_all>6：
+            1.点击前一页:
+            2.点击后一页:
+                page<=2:
+                    不需要重新加载li标签
+                page>2:
+                    li标签重新加载
+                    结论：     
+                        page_all-page<=4 时 无省略号
+                            page_all-5 page_all-4 page_all-3 page_all-2 page_all-1 page_all
+                        page_all-page>4 有省略号
+                            page-2 page-1 page ... page_all-1 page_all
+            3.页数点击:
+                page<=2:
+                    不需要重新加载li标签
+                page>2:
+                    li标签需要重新加载
+                    结论：
+                        page_all-page<=4 不需要加载省略号
+                            page_all-5 page_all-4 page_all-3 page_all-2 page_all-1 page_all
+                        page_all-page>4 需要加载省略号
+                            page-1 page page+1 ... page_all-1 page_all
+                    page_all=7  
+                        page=3  2 3 4 5 6 7  
+                        page=4  2 3 4 5 6 7
+                    page_all=8
+                        page=3  2 3 4 ... 7 8
+                        page=4  3 4 5 6 7 8 
+                        page=5  3 4 5 6 7 8
+                    page_all=9
+                        page=3  2 3 4 ... 8 9
+                        page=4  3 4 5 ... 8 9
+                        page=5  4 5 6 7 8 9
+                        page=6  4 5 6 7 8 9
+            4.输入页数跳转：
+                page<=2:
+                    不需要重新加载li标签
+                page>2:
+                    li标签需要重新加载
+                    结论：
+                        page_all-page<=4 不需要加载省略号
+                            page_all-5 page_all-4 page_all-3 page_all-2 page_all-1 page_all
+                        page_all-page>4 需要加载省略号
+                            page-1 page page+1 ... page_all-1 page_all
+
+   -->
+    <!-- 结论：
+        1.定义函数getPaging(count,limit,page)添加页数列表（ 只要page改变 就调用该函数 ）：
+            page_all<=6
+                1 2 3 4 5 6(page_all)
+                如果page<page_all:
+                    给第page个li标签添加page_active
+            page_all>6:
+                page<=2:
+                    1 2 3 ... page_all-1 page_all
+                    给第page个li标签添加page_active
+                page>2:
+                    page_all-page<=4 不需要加载省略号
+                        page_all-5 page_all-4 page_all-3 page_all-2 page_all-1 page_all
+                        如果page<page_all
+                            给第(6-(page_all-page))个li标签添加page_active
+                    page_all-page>4 需要加载省略号
+                        page-1 page page+1 ... page_all-1 page_all    
+                        给第2个li标签添加page_active
+            跳转页面：
+                如果page<1 || page>page_all 请求页数不存在            
+        2.定义函数checkPageBtn(page_all) 校验前后页按钮是否可用 （只要page值改变 就调用该函数）:
+            page==1 前一页不可用
+            page==page_all 后一页不可用
+                
+         -->
+     <div class="paging clearfix">
+        <button class="pre_page fl" disabled="disabled">&lt;</button>
+        <ul class="fl">
+            <li class="fl page_active">1</li>
+            <li class="fl">2</li>
+            <li class="fl">3</li>
+            <li class="fl">4</li>
+            <li class="fl">5</li>
+            <li class="fl">6</li>
+        </ul>
+        <button class="back_page fl" disabled="disabled">&gt;</button>
+        <!-- 跳转 -->
+        <div class="jump fl">
+            跳转到第<input type="text">页
+            <button>确定</button>
+        </div>
+     </div>
+</body>
+<script>
+    /*
+        count:信息数量
+        limit: 每页信息数
+        page_all: 总页数 = （count/limit）+1
+        page: 请求页数
+    */
+    function getPaging(count,limit,page){
+     // 定义li标签列表start
+        var page_li = "";
+        if(page_all<=6){
+            // 1 2 3 4 5 6(page_all)
+            for(var i=1;i<=page_all;i++){
+                page_li += '<li class="fl">'+i+'</li>';
+            }
+        }else{
+            if(page<=2){
+                page_li=`
+                    <li class="fl">1</li>
+                    <li class="fl">2</li>
+                    <li class="fl">3</li>
+                    <li class="fl">...</li> 
+                `
+                for(var i=page_all-1;i<=page_all;i++){
+                    page_li += '<li class="fl">'+i+'</li>';
+                }
+            }else{
+                if(page_all-page<=4){
+                    page_li = "";
+                    // 不需要省略号
+                    for(var i=page_all-5;i<=page_all;i++){
+                        page_li += '<li class="fl">'+i+'</li>';
+                    }
+                }else{
+                    // 需要加省略号
+                    for(var i=page-1;i<=page+1;i++){
+                        page_li += '<li class="fl">'+i+'</li>';
+                    }
+                    page_li += '<li class=fl>...</li>';
+                    for(var i=page_all-1;i<=page_all;i++){
+                        page_li += '<li class="fl">'+i+'</li>';
+                    }
+                }
+            }
+        }
+     // 定义li标签列表end  
+       // 插入li标签
+        $(".paging ul li").remove();
+        $(".paging ul").append(page_li);
+        console.log(page_li);
+     // 给第page个li标签添加page_active start
+        if(page_all<=6){
+                if(page<page_all){
+                    $(".paging ul li").removeClass("page_active");
+                    $(".paging ul li").eq(page-1).addClass("page_active");
+                }else{
+                    $(".paging ul li").eq(page_all-1).addClass("page_active");
+                }
+            }else{
+                if(page<page_all){
+                    if(page<=2){
+                        $(".paging ul li").removeClass("page_active");
+                        $(".paging ul li").eq(page-1).addClass("page_active");
+                    }else{
+                        if(page_all-page<=4){
+                            if( page < page_all){
+                                    $(".paging ul li").removeClass("page_active");
+                                    $(".paging ul li").eq(6-(page_all-(page-1))).addClass("page_active");
+                            }
+                        }else{
+                            $(".paging ul li").removeClass("page_active");
+                            $(".paging ul li").eq(1).addClass("page_active");
+                        }
+                    }
+                }else{
+                    $(".paging ul li").eq(5).addClass("page_active");
+                }
+            }
+     // 给第page个li标签添加page_active end
+    }
+    // 判断按钮是否可用
+    function checkPageBtn(page_all,page){
+        if(page == 1){
+            $(".pre_page").removeClass("page_btn");
+            $(".pre_page").attr("disabled","disabled");
+        }else{
+            $(".pre_page").addClass("page_btn");
+            $(".pre_page").removeAttr("disabled");
+        }
+        if(page == page_all){
+            $(".back_page").removeClass("page_btn");
+            $(".back_page").attr("disabled","disabled");
+        }else{
+            $(".back_page").addClass("page_btn");
+            $(".back_page").removeAttr("disabled");
+        }
+    }
+    // page点击事件
+    var page = $(".page_active").html();
+    var count = 30;
+    var limit = 2;
+    var page_all = "";
+    if(count%limit == 0){
+        page_all = parseInt(count/limit);
+    }else{
+        page_all = parseInt(count/limit)+1;
+    }
+    // 前一页
+    $(".pre_page").click(function(){
+        if(page>1){
+            page--;
+            checkPageBtn(page_all,page);
+        }
+        getPaging(count,limit,page);
+        console.log("page1"+page);
+    })
+    // 后一页
+    $(".back_page").click(function(){
+        if(page<page_all){
+            page++;
+            checkPageBtn(page_all,page);
+        }
+        getPaging(count,limit,page);
+        console.log("page2"+page);
+    })
+    // 页数点击
+    $(".paging ul").on("click","li",function(){
+        if($(this).html() != "..."){
+            page = parseInt($(this).html());
+            getPaging(count,limit,page);
+            checkPageBtn(page_all,page);
+        }
+    })
+    // 页数跳转
+    $(".jump button").click(function(){
+        if($(".jump input").val()<=0){
+            page = 1;
+            getPaging(count,limit,page);
+            checkPageBtn(page_all,page);
+        }else if($(".jump input").val()>page_all){
+            page = page_all;
+            getPaging(count,limit,page);
+            checkPageBtn(page_all,page);
+        }else{
+            page = $(".jump input").val();
+            getPaging(count,limit,page);
+            checkPageBtn(page_all,page);
+        }
+    })
+    $(document).ready(function(){
+        getPaging(30,2,1);
+        checkPageBtn(page_all,1);
+    })
+</script>
+</html>
